@@ -7,7 +7,21 @@
 	<link rel="stylesheet" type="text/css" href="style.css">
 	<script src="fantik.js"></script>
 </head>
-<body onload="fantik()">
-	<canvas id="canvas" />
+<body onload="init()">
+	<div class="panel noselect">
+		<p><form>
+			Скорость:<br /><input type="number" min="20.0" max="40.0" id="speed" value="26" /> м/с<br />
+			Скорость набора:<br /><input type="number" min="0.0" max="10.0" id="maxVz" value="2" /> м/с<br />
+			Скорость снижения:<br /><input type="number" min="-10.0" max="0.0" id="minVz" value="-3" /> м/с<br />
+			Высота огибания:<br /><input type="number" min="0" max="100" id="followH" value="70" /> м<br />
+			Допуск высоты:<br /><input type="number" min="0" max="100" id="tolerance" value="30" /> м<br />
+			Шаг расчёта:<br /><input type="number" min="50" max="500" id="step" value="100" /> м<br />
+			<input type="checkbox" id="optimize">оптимизация</input>
+		</form></p>
+		<p>В допуске: <span id="stat"></span> %</p>
+	</div>
+	<div class="main">
+		<canvas class="full" id="canvas" />
+	</div>
 </body>
 </html>

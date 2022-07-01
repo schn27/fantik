@@ -1,41 +1,211 @@
 "use strict"
 
+let g_config = {};
+
+function init() {
+	const canvas = document.getElementById('canvas');
+
+	const terrainEditor = new TerrainEditor(canvas, new Terrain());
+	terrainEditor.terrain_redraw = draw;
+	terrainEditor.terrain_commit = calc;
+
+	window.addEventListener('resize', (evt) => {
+		canvas.width = canvas.parentElement.clientWidth;
+		canvas.height = canvas.parentElement.clientHeight;
+		terrainEditor.on_resize();
+	});
+
+	g_config = readForm();
+
+	window.dispatchEvent(new Event('resize'));
+
+	document.querySelector('form').addEventListener('change', () => {
+		g_config = readForm();
+		window.dispatchEvent(new Event('resize'));
+	});
+}
+
+function calc(terrain) {
+	const diffP = g_config.maxVz / g_config.speed * g_config.step;
+	const diffN = g_config.minVz / g_config.speed * g_config.step;
+	const terrainValues = terrain.getValues(g_config.step).map(h => h + g_config.followH);
+
+	const {path, stat} = getPathWithStat(terrainValues, diffP, diffN, g_config.tolerance);
+
+	document.getElementById('stat').innerHTML = stat;
+	drawPath(g_config.optimize ? optimizePath(path) : path, terrain.getScope());
+}
+
+function getPathWithStat(terrainValues, diffP, diffN, tolerance) {
+	const path = terrainValues.map(_ => 0);
+
+	for (let done = false; !done;) {
+		const diff = path.map((e, i) => ([i, e - terrainValues[i]])).filter(e => e[1] < 0);
+		
+		if (diff.length == 0) {
+			done = true;
+
+		} else {
+			let min = diff[0];
+
+			for (let i = 1; i < diff.length; ++i) {
+				if (diff[i][1] < min[1]) {
+					min = diff[i];
+				}
+			}
+
+			const index = min[0];
+
+			path[index] = terrainValues[index];
+
+			for (let i = index - 1; i >= 0; --i) {
+				const diff = path[i + 1] - path[i];
+				if (diff > diffP) {
+					path[i] = path[i + 1] - diffP;
+				} else if (diff < diffN) {
+					path[i] = path[i + 1] - diffN;
+				} else {
+					break;
+				}
+			}
+
+			for (let i = index + 1; i < path.length; ++i) {
+				const diff = path[i] - path[i - 1];
+				if (diff > diffP) {
+					path[i] = path[i - 1] + diffP;
+				} else if (diff < diffN) {
+					path[i] = path[i - 1] + diffN;
+				} else {
+					break;
+				}
+			}
+		}
+	}
+
+	return {
+		path: path,
+		stat: path.filter((e, i) => e - terrainValues[i] <= tolerance).length / path.length * 100
+	};
+}
+
+function optimizePath(path) {
+	return path.map((e, i) =>
+		((i == 0 || i == path.length - 1) || 
+			(Math.abs(2 * e - path[i - 1] - path[i + 1]) > 0.001)) ? e : undefined);
+}
+
+function readForm() {
+	return {
+		speed: +document.getElementById('speed').value,
+		maxVz: +document.getElementById('maxVz').value,
+		minVz: +document.getElementById('minVz').value,
+		followH: +document.getElementById('followH').value,
+		tolerance: +document.getElementById('tolerance').value,
+		step: +document.getElementById('step').value,
+		optimize: document.getElementById('optimize').checked
+	};
+}
+
+class TerrainEditor {
+	constructor(canvas, terrain) {
+		this._canvas = canvas;
+		this._terrain = terrain;
+		this._lastCoord = undefined;
+
+		canvas.addEventListener('mousedown', (evt) => this.onMouseDown(evt));
+		canvas.addEventListener('mouseup', (evt) => this.onMouseUp(evt));
+	}
+
+	on_resize() {
+		if (this._terrain_redraw) {
+			this._terrain_redraw(this._terrain);
+		}
+
+		if (this._terrain_commit) {
+			this._terrain_commit(this._terrain);
+		}
+	}
+
+	set terrain_redraw(func) {
+		this._terrain_redraw = func;
+	}
+
+	set terrain_commit(func) {
+		this._terrain_commit = func;
+	}
+
+	onMouseDown(evt) {
+		if (evt.button == 0) {
+			if (this._event_function) {
+				this._canvas.removeEventListener('mousemove', this._event_function);
+			}
+
+			this._event_function = (evt) => this.onMouseMove(evt);
+			this._canvas.addEventListener('mousemove', this._event_function);
+			this.onMouseMove(evt);
+		}
+	}
+
+	onMouseUp(evt) {
+		if (evt.button == 0) {
+			this._canvas.removeEventListener('mousemove', this._event_function);
+			this._event_function = null;
+			this._lastCoord = undefined;
+
+			if (this._terrain_commit) {
+				this._terrain_commit(this._terrain);
+			}
+		}
+	}
+
+	onMouseMove(evt) {
+		const scaleX = this._canvas.width / this._terrain.getScope().length;
+		const scaleY = this._canvas.height / this._terrain.getScope().height;
+		const index = Math.floor(evt.offsetX / scaleX);
+		const h = (this._canvas.height - evt.offsetY) / scaleY;
+		this._terrain.setValue(index, h);
+
+		if (this._lastCoord) {
+			const fromIndex = Math.min(this._lastCoord[0], index);
+			const toIndex = Math.max(this._lastCoord[0], index);
+			const fromH = this._terrain.getValues()[fromIndex];
+			const toH = this._terrain.getValues()[toIndex];
+			for (let i = fromIndex + 1; i < toIndex; ++i) {
+				this._terrain.setValue(i, fromH + (toH - fromH) / (toIndex - fromIndex) * (i - fromIndex));
+			}
+		}
+
+		this._lastCoord = [index, h];
+
+		if (this._terrain_redraw) {
+			this._terrain_redraw(this._terrain);
+		}
+	}
+}
+
 class Terrain {
-	constructor() {
-		this._maxValue = 500;
-		this._length = 1000;
-		this._grid = 10;
-		this._values = new Array(this._length);
-		this._values.fill(0);
+	constructor(width = 10000, height = 500, grid = 10) {
+		this._height = height;
+		this._width = width;
+		this._grid = grid;
+		this._values = new Array(width / grid).fill(0);
 	}
 
-	getMaxValue() {
-		return this._maxValue;
+	getScope() {
+		return {length: this._values.length, width: this._width, height: this._height};
 	}
 
-	getDistance() {
-		return this._length * this._grid;
-	}
-
-	getLength() {
-		return this._length;
-	}
-
-	getGrid() {
-		return this._grid;
-	}
-
-	getValues(step) {
-		if (step == undefined || step <= this._grid) {
+	getValues(grid) {
+		if (grid == undefined || grid <= this._grid) {
 			return this._values;
 		}
 
-		const indexStep = step / this._grid;
+		const indexStep = grid / this._grid;
 
 		const res = [];
 
-		for (let index = 0; index < this._values.length; index += indexStep) {
-			res.push(Math.max(...this._values.slice(Math.floor(index), Math.floor(index + indexStep))));
+		for (let index = 0.0; index < this._values.length; index += indexStep) {
+			res.push(this._values[Math.floor(index)]);
 		}
 
 		return res;
@@ -55,195 +225,50 @@ function draw(terrain) {
 	ctx.save();
 	ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-	ctx.fillStyle = '#000000';
+	const scaleX = canvas.width / terrain.getScope().length;
+	const scaleY = canvas.height / terrain.getScope().height;
 
-	const scaleX = canvas.width / terrain.getLength();
-	const scaleY = canvas.height / terrain.getMaxValue();
-
-	terrain.getValues().map((h, i) => 
+	terrain.getValues().map((h, i) =>
 		([Math.floor(i * scaleX), canvas.height - h * scaleY, Math.floor(scaleX) + 1, h * scaleY]))
-	.forEach(e => ctx.fillRect(...e));
+	.forEach(e => {
+		ctx.fillStyle = '#000000';
+		ctx.fillRect(...e);
+		ctx.fillStyle = '#AAFFAA';
+		ctx.fillRect(e[0], e[1] - (g_config.followH + g_config.tolerance) * scaleY, e[2], g_config.tolerance * scaleY);
+	});
 
 	ctx.restore();
 }
 
-let terrain = new Terrain();
-let lastCoord = undefined;
-
-function fantik() {
-	const canvas = document.getElementById('canvas');
-	canvas.width = window.innerWidth;
-	canvas.height = window.innerHeight;
-	canvas.addEventListener('mousedown', onMouseDown);
-	canvas.addEventListener('mouseup', onMouseUp);
-
-	draw(terrain);
-}
-
-function onMouseDown(evt) {
-	if (evt.buttons == 1) {
-		document.getElementById('canvas').addEventListener('mousemove', onMouseMove);
-		onMouseMove(evt);
-	}
-}
-
-function onMouseUp(evt) {
-	if (evt.buttons == 0) {
-		document.getElementById('canvas').removeEventListener('mousemove', onMouseMove);
-		lastCoord = undefined;
-
-		drawPath(getPath(terrain));
-	}
-}
-
-function onMouseMove(evt) {
-	if (evt.buttons == 0) {
-		onMouseUp(evt);
-		return;
-	}
-
-	const canvas = document.getElementById('canvas');
-	const scaleX = canvas.width / terrain.getLength();
-	const scaleY = canvas.height / terrain.getMaxValue();
-	const index = Math.floor(evt.clientX / scaleX);
-	const h = (canvas.height - evt.clientY) / scaleY;
-	terrain.setValue(index, h);
-
-	if (lastCoord) {
-		const fromIndex = Math.min(lastCoord[0], index);
-		const toIndex = Math.max(lastCoord[0], index);
-		const fromH = terrain.getValues()[fromIndex];
-		const toH = terrain.getValues()[toIndex];
-		for (let i = fromIndex + 1; i < toIndex; ++i) {
-			terrain.setValue(i, fromH + (toH - fromH) / (toIndex - fromIndex) * (i - fromIndex));
-		}
-	}
-
-	lastCoord = [index, h];
-
-	draw(terrain);
-}
-
-function drawPath(path) {
+function drawPath(path, scope) {
 	const canvas = document.getElementById('canvas');
 	const ctx = canvas.getContext('2d');
-
 	ctx.strokeStyle = '#FF00FF';
 	ctx.fillStyle = '#FF00FF';
 
-	const scaleX = terrain.getDistance() / canvas.width;
-	const scaleY = terrain.getMaxValue() / canvas.height;
-
-	let prev = undefined;
-
-	const getX = (x) => x / scaleX;
-	const getY = (y) => canvas.height  - y / scaleY;
+	const scaleX = scope.width / canvas.width;
+	const scaleY = scope.height / canvas.height;
 	const circleRadius = 2;
 
-	path.forEach(e => {
-		if (prev) {
-			ctx.beginPath();
-			ctx.moveTo(getX(prev[0]), getY(prev[1]));
-			ctx.lineTo(getX(e[0]), getY(e[1]));
-			ctx.stroke();
-		}
-
-		ctx.beginPath();
-		ctx.arc(getX(e[0]), getY(e[1]), circleRadius, 0, 2 * Math.PI, false);
-		ctx.fill();
-		prev = e;
-	});
-}
-
-function getPath(terrain) {
-	const step = 100;
-	const maxVz = 2.0;
-	const minVz = -3.0;
-	const speed = 26.0;
-	const followH = 70.0;
-
-	const maxGradient = maxVz / speed * step;
-	const minGradient = minVz / speed * step;
-
-	const terrainValues = terrain.getValues(step);
-	const pathValues = terrainValues.map(_ => 0);
-
-	for (let done = false; !done;) {
-		const diff = pathValues.map((e, i) => ([i, e - terrainValues[i]])).filter(e => e[1] < 0);
-		
-		if (diff.length == 0) {
-			done = true;
-
-		} else {
-			let min = diff[0];
-
-			for (let i = 1; i < diff.length; ++i) {
-				if (diff[i][1] < min[1]) {
-					min = diff[i];
-				}
-			}
-
-			const index = min[0];
-
-			pathValues[index] = terrainValues[index];
-
-			for (let i = index - 1; i >= 0; --i) {
-				const delta = pathValues[i + 1] - pathValues[i];
-				if (delta > maxGradient) {
-					pathValues[i] = pathValues[i + 1] - maxGradient;
-				} else if (delta < minGradient) {
-					pathValues[i] = pathValues[i + 1] - minGradient;
-				} else {
-					break;
-				}
-			}
-
-			for (let i = index + 1; i < pathValues.length; ++i) {
-				const delta = pathValues[i] - pathValues[i - 1];
-				if (delta > maxGradient) {
-					pathValues[i] = pathValues[i - 1] + maxGradient;
-				} else if (delta < minGradient) {
-					pathValues[i] = pathValues[i - 1] + minGradient;
-				} else {
-					break;
-				}
-			}
-		}
-	}
-
-	return optimizePath(pathValues.map((h, i) => ([i * step, h + followH])), 0.005);
-}
-
-function optimizePath(path, maxError) {
-	let error = 0;
-
-	let prevGradient = undefined;
 	let prev = undefined;
 
-	const res = [];
+	path.forEach((e, i) => {
+		if (e) {
+			const x = i * g_config.step / scaleX;
+			const y = canvas.height - e / scaleY;
 
-	path.forEach(e => {
-		if (res.length == 0) {
-			res.push(e);
-		} else {
-			const last = res[res.length - 1];
-			const gradient = (e[1] - last[1]) / (e[0] - last[0]);
-
-			if (prevGradient == undefined) {
-				prevGradient = gradient;
+			if (prev) {
+				ctx.beginPath();
+				ctx.moveTo(...prev);
+				ctx.lineTo(x, y);
+				ctx.stroke();
 			}
 
-			if (prev && Math.abs(gradient - prevGradient) > maxError) {
-				res.push(prev);
-				prevGradient = (e[1] - prev[1]) / (e[0] - prev[0]);
-			}
+			ctx.beginPath();
+			ctx.arc(x, y, circleRadius, 0, 2 * Math.PI, false);
+			ctx.fill();
 
-
-			prev = e;
+			prev = [x, y];
 		}
 	});
-
-	res.push(prev);
-
-	return res;
 }
