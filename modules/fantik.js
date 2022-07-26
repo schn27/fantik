@@ -1,8 +1,13 @@
-function getPathWithStat(terrainValues, diffP, diffN, tolerance) {
-	const path = terrainValues.map(_ => 0);
+function getPathWithStat(terrainValues, config) {
+	const diffP = config.maxVz / config.speed * config.step;
+	const diffN = config.minVz / config.speed * config.step;
+
+	const limits = terrainValues.map(v => [v + config.followH, v + config.followH + config.tolerance]);
+
+	const path = terrainValues.map(_ => -1e6);
 
 	for (let done = false; !done;) {
-		const diff = path.map((e, i) => ([i, e - terrainValues[i]])).filter(e => e[1] < 0);
+		const diff = path.map((e, i) => ([i, e - limits[i][0]])).filter(e => e[1] < 0);
 		
 		if (diff.length == 0) {
 			done = true;
@@ -18,7 +23,7 @@ function getPathWithStat(terrainValues, diffP, diffN, tolerance) {
 
 			const index = min[0];
 
-			path[index] = terrainValues[index];
+			path[index] = limits[index][0];
 
 			for (let i = index - 1; i >= 0; --i) {
 				const diff = path[i + 1] - path[i];
@@ -44,7 +49,6 @@ function getPathWithStat(terrainValues, diffP, diffN, tolerance) {
 		}
 	}
 
-	const limits = terrainValues.map(v => [v, v + tolerance]);
 	const optimized = optimizePath(path, limits, diffP, diffN);
 
 	return {

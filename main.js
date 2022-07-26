@@ -29,14 +29,10 @@ function init() {
 }
 
 function calc(terrain) {
-	const diffP = g_config.maxVz / g_config.speed * g_config.step;
-	const diffN = g_config.minVz / g_config.speed * g_config.step;
-	const terrainValues = terrain.getValues(g_config.step).map(h => h + g_config.followH);
+	const result = getPathWithStat(terrain.getValues(g_config.step), g_config);
 
-	const {path, breakPoints, stat} = getPathWithStat(terrainValues, diffP, diffN, g_config.tolerance);
-
-	drawPath(path, breakPoints, terrain.getScope());
-	document.getElementById('stat').innerHTML = stat;
+	drawPath(result.path, result.breakPoints, terrain.getScope());
+	document.getElementById('stat').innerHTML = result.stat;
 }
 
 function readForm() {
