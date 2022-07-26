@@ -29,10 +29,22 @@ function init() {
 }
 
 function calc(terrain) {
-	const result = getPathWithStat(terrain.getValues(g_config.step), g_config);
+	const terrainValues = terrain.getValues(g_config.step);
 
-	drawPath(result.path, result.breakPoints, terrain.getScope());
-	document.getElementById('stat').innerHTML = result.stat;
+	/* Здесь только первая и последняя точки помечены как контрольные.
+	 * В реальном использовании любое количество точек может быть помечено как контрольные.
+	 * Это необходимо, если на обработку отдан маршрут с поворотными пунктами, которые должны остаться
+	 * в результирующем массиве контрольных точек.
+	 */
+	const controlPoints = terrainValues.map((_, i) => (i == 0) || (i == terrainValues.length - 1));
+
+	const result = getPathWithStat(terrainValues, controlPoints, g_config);
+
+	drawPath(result.path, result.controlPoints, terrain.getScope());
+	document.getElementById('stat').innerHTML = Math.round(result.stat);
+	document.getElementById('averageHeight').innerHTML = Math.round(result.averageHeight);
+	document.getElementById('minHeight').innerHTML = Math.round(result.minHeight);
+	document.getElementById('maxHeight').innerHTML = Math.round(result.maxHeight);
 }
 
 function readForm() {

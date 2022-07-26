@@ -1,4 +1,39 @@
-function getPathWithStat(terrainValues, config) {
+/* Построение маршрута огибания рельефа.
+ *
+ * terrainValues - массив высот рельефа взятых вдоль маршрута с шагом config.step метров
+ * controlPoints - массив (true/false) контрольных точек (ППМ) исходного маршрута,
+ *                 должен по размеру совпадать с terrainValues
+ * config - объект с параметрами огибания:
+ *   step - шаг точек в массиве terrainValues, м
+ *   followH - высота огибания, м
+ *   tolerance - допустимое отклонение вверх от высоты огибания, м
+ *   speed - максимальная путевая скорость (истинная воздушная + прогнозируемый ветер), м/с
+ *   maxVz - максимальная вертикальная скорость (набор), м/с
+ *   minVz - минимальная ветикальная скорость (снижение, должна быть отрицательная), м/с
+ *
+ * Возвращает объект:
+ *   path - массив абсолютных высот точек в метрах (размер совпадает с terrainValues)
+ *   controlPoints - массив (true/false) контрольных точек (исходные ППМ + точки именения градиента, расчитанные алгоритмом)
+ *   insideLimits - массив (true/false) признаков, находится ли точка внутри зоны допуска по высоте
+ *   stat - процент точек, которые находятся внутри зоны допуска по высоте
+ *   averageHeight - среднее превышение над рельефом, м
+ *   minHeight - минимальное превышение над рельефом (должно совпадать с config.followH), м
+ *   maxHeight - максимальное превышение над рельефом, м
+ *
+ * Для использования необходимо:
+ * 1) Вдоль маршрута расставить точки с шагом config.step
+ * 2) Полученные точки объединить с исходными ППМ в один массив
+ * 3) Сформировать на основе него массив высот рельефа (terrainValues)
+ * 3) Cформировать массив controlPoints, в котором как true отметить исходные ППМ, а остальные оставить false
+ * 4) Вызвать getPathWithStat
+ * 5) Использовать массив из п. 2 и полученные path и controlPoints для формирования результирующего ПЗ
+ *    (точки, помеченные как false в conrolPoits не идут в ПЗ)
+ * 6) Использовать insideLimits, stat, averageHeight и maxHeight для информирования.
+ *    Предполагается, что  может быть использован для пометки на карте мест, где происходит
+ *    выход за допустимый допуск по высоте (config.tolerance)
+ */
+
+function getPathWithStat(terrainValues, controlPoints, config) {
 	const diffP = config.maxVz / config.speed * config.step;
 	const diffN = config.minVz / config.speed * config.step;
 
@@ -49,19 +84,23 @@ function getPathWithStat(terrainValues, config) {
 		}
 	}
 
-	const optimized = optimizePath(path, limits, diffP, diffN);
+	const optimized = optimizePath(path, controlPoints, limits, diffP, diffN);
 
-	return {
-		path: optimized.path,
-		breakPoints: optimized.breakPoints,
-		stat: path.filter((e, i) => e <= limits[i][1]).length / path.length * 100
-	};
+	const insideLimits = optimized.path.map((e, i) => (e >= limits[i][0]) && (e <= limits[i][1]));
+	const stat = insideLimits.filter(e => e).length / insideLimits.length * 100;
+	const heights = optimized.path.map((e, i) => e - terrainValues[i]);
+	const averageHeight = heights.reduce((a, e) => a + e, 0) / heights.length;
+	const minHeight = Math.min(...heights);
+	const maxHeight = Math.max(...heights);
+
+	return {...optimized, insideLimits, stat, averageHeight, minHeight, maxHeight};
 }
 
-function optimizePath(path, limits, diffP, diffN) {
+function optimizePath(path, controlPoints, limits, diffP, diffN) {
 	path = optimizePathPass1(path, limits, diffP, diffN);
 	path = optimizePathPass2(path, limits, diffP, diffN);
-	return {path: path, breakPoints: getBreakPoints(path)};
+	controlPoints = getControlPoints(path).map((e, i) => e || controlPoints[i]);
+	return {path, controlPoints};
 }
 
 function optimizePathPass1(path, limits, diffP, diffN) {
@@ -125,9 +164,9 @@ function optimizePathPass2(path, limits, diffP, diffN) {
 	return path;
 }
 
-function getBreakPoints(path) {
-	return path.map((e, i) =>
-		(i == 0) || (i == path.length - 1) || (Math.abs(2 * e - path[i - 1] - path[i + 1]) > 1e-6));
+function getControlPoints(path) {
+	return path.map((e, i) => (i == 0) || (i == path.length - 1) ||
+		(Math.abs(2 * e - path[i - 1] - path[i + 1]) > 1e-3));
 }
 
 export {getPathWithStat};
