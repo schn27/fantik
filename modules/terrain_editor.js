@@ -53,7 +53,7 @@ class TerrainEditor {
 	onMouseMove(evt) {
 		const scaleX = this._canvas.width / this._terrain.getScope().length;
 		const scaleY = this._canvas.height / this._terrain.getScope().height;
-		const index = Math.floor(evt.offsetX / scaleX);
+		const index = Math.min(Math.floor(evt.offsetX / scaleX), this._terrain.getValues().length - 1);
 		const h = (this._canvas.height - evt.offsetY) / scaleY;
 		this._terrain.setValue(index, h);
 
@@ -62,6 +62,7 @@ class TerrainEditor {
 			const toIndex = Math.max(this._lastCoord[0], index);
 			const fromH = this._terrain.getValues()[fromIndex];
 			const toH = this._terrain.getValues()[toIndex];
+
 			for (let i = fromIndex + 1; i < toIndex; ++i) {
 				this._terrain.setValue(i, fromH + (toH - fromH) / (toIndex - fromIndex) * (i - fromIndex));
 			}
