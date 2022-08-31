@@ -45,6 +45,10 @@ function calc(terrain) {
 	document.getElementById('averageHeight').innerHTML = Math.round(result.averageHeight);
 	document.getElementById('minHeight').innerHTML = Math.round(result.minHeight);
 	document.getElementById('maxHeight').innerHTML = Math.round(result.maxHeight);
+
+	const ok = validate(result.path, result.controlPoints, g_config);
+	document.getElementById('valid').innerHTML = ok ? 'Норм' : 'Ошибка';
+	document.getElementById('valid').style = ok ? 'background-color:green;' : 'background-color:red;';
 }
 
 function readForm() {
@@ -111,4 +115,30 @@ function drawPath(path, breakPoints, scope) {
 			prev = [x, y];
 		}
 	});
+}
+
+function validate(path, controlPoints, config) {
+	let prevH = undefined;
+	let dist = 0;
+	const vzs = [];
+
+	for (let i = 0; i < path.length; ++i) {
+		dist += config.step;
+
+		if (controlPoints[i]) {
+			if (prevH != undefined) {
+				vzs.push((path[i] - prevH) / dist * config.speed);
+			}
+
+			prevH = path[i];
+			dist = 0;
+		}
+	}
+
+	const VZ_TOLERANCE = 1e-6;
+
+	const ok = vzs.every(e => e <= config.maxVz + VZ_TOLERANCE && e >= config.minVz - VZ_TOLERANCE);
+	console.log(ok, vzs);
+
+	return ok;
 }
