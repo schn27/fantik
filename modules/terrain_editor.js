@@ -18,6 +18,31 @@ class TerrainEditor {
 		}
 	}
 
+	generate() {
+		const n = this._terrain.getValues().length;
+		const max_freq =  (2 * Math.PI / n) * 50;
+		const min_freq = 0.01;
+		const num_of_freqs = 100;
+		const amplitude = this._terrain.getScope().height * 0.2;
+
+		const freqs = [];
+
+		for (let i = 0; i < num_of_freqs; ++i) {
+			const freq = Math.pow(Math.random(), 5);
+			freqs.push({
+				'freq': Math.max(min_freq, freq * max_freq),
+				'phase': Math.random() * 2 * Math.PI,
+				'amplitude': Math.random() * (1 - Math.pow(freq, 0.03))});
+		}
+
+		for (let i = 0; i < n; ++i) {
+			const v = freqs.map(e => e.amplitude * Math.sin(e.freq * i + e.phase)).reduce((a, e) => a + e, 0);
+			this._terrain.setValue(i, Math.max(amplitude * (v + 1.0), 0));
+		}
+
+		this.on_resize();
+	}
+
 	set terrain_redraw(func) {
 		this._terrain_redraw = func;
 	}

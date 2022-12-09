@@ -12,6 +12,10 @@ function init() {
 	terrainEditor.terrain_redraw = draw;
 	terrainEditor.terrain_commit = calc;
 
+	document.getElementById('randomTerrain').onclick = () => {
+		terrainEditor.generate();
+	}
+
 	window.addEventListener('resize', (evt) => {
 		canvas.width = canvas.parentElement.clientWidth;
 		canvas.height = canvas.parentElement.clientHeight;
