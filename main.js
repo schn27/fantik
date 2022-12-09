@@ -2,6 +2,13 @@ import {Terrain} from './modules/terrain.js';
 import {TerrainEditor} from './modules/terrain_editor.js';
 import {getPathWithStat} from './modules/fantik.js';
 
+const COLOR_TERRAIN = '#000000';
+const COLOR_TERRAIN_GRID = '#222222';
+const COLOR_LOW = '#FFFF66';
+const COLOR_TOLERANCE = '#66FF66';
+const COLOR_PATH = '#FF00FF';
+const COLOR_NOT_OPTIMIZED_PATH = '#AAAAAA';
+
 let g_config = {};
 init();
 
@@ -35,6 +42,8 @@ function init() {
 function calc(terrain) {
 	const terrainValues = terrain.getValues(g_config.step);
 
+	drawSteps(terrain);
+
 	/* Здесь только первая и последняя точки помечены как контрольные.
 	 * В реальном использовании любое количество точек может быть помечено как контрольные.
 	 * Это необходимо, если на обработку отдан маршрут с поворотными пунктами, которые должны остаться
@@ -44,7 +53,9 @@ function calc(terrain) {
 
 	const result = getPathWithStat(terrainValues, controlPoints, g_config);
 
+	drawPath(result.not_optimized_path, result.not_optimized_path.map(_ => true), terrain.getScope(), COLOR_NOT_OPTIMIZED_PATH);
 	drawPath(result.path, result.controlPoints, terrain.getScope());
+
 	document.getElementById('stat').innerHTML = Math.round(result.stat);
 	document.getElementById('averageHeight').innerHTML = Math.round(result.averageHeight);
 	document.getElementById('minHeight').innerHTML = Math.round(result.minHeight);
@@ -76,23 +87,53 @@ function draw(terrain) {
 	const scaleX = canvas.width / terrain.getScope().length;
 	const scaleY = canvas.height / terrain.getScope().height;
 
-	terrain.getValues().map((h, i) =>
-		([Math.floor(i * scaleX), canvas.height - h * scaleY, Math.floor(scaleX) + 1, h * scaleY]))
-	.forEach(e => {
-		ctx.fillStyle = '#000000';
-		ctx.fillRect(...e);
-		ctx.fillStyle = '#AAFFAA';
-		ctx.fillRect(e[0], e[1] - (g_config.followH + g_config.tolerance) * scaleY, e[2], g_config.tolerance * scaleY);
-	});
+	terrain.getValues()
+		.map((h, i) =>
+			([Math.floor(i * scaleX), canvas.height - h * scaleY, Math.floor(scaleX) + 1, h * scaleY]))
+		.forEach(e => {
+			ctx.fillStyle = COLOR_TERRAIN;
+			ctx.fillRect(...e);
+			ctx.fillStyle = COLOR_LOW;
+			ctx.fillRect(e[0], e[1] - g_config.followH * scaleY, e[2], g_config.followH * scaleY);
+			ctx.fillStyle = COLOR_TOLERANCE;
+			ctx.fillRect(e[0], e[1] - (g_config.followH + g_config.tolerance) * scaleY, e[2], g_config.tolerance * scaleY);
+		});
 
 	ctx.restore();
 }
 
-function drawPath(path, breakPoints, scope) {
+function drawSteps(terrain) {
 	const canvas = document.getElementById('canvas');
 	const ctx = canvas.getContext('2d');
-	ctx.strokeStyle = '#FF00FF';
-	ctx.fillStyle = '#FF00FF';
+
+	ctx.save();
+
+	const values = terrain.getValues(g_config.step);
+
+	const scaleX = canvas.width / values.length;
+	const scaleY = canvas.height / terrain.getScope().height;
+
+	ctx.beginPath();
+	ctx.strokeStyle = COLOR_TERRAIN_GRID;
+	ctx.lineWidth = 1;
+
+	values.map((h, i) =>
+			([Math.floor(i * scaleX), canvas.height, Math.floor(i * scaleX), canvas.height - h * scaleY]))
+		.forEach(e => {
+			ctx.moveTo(e[0], e[1]);
+			ctx.lineTo(e[2], e[3]);
+		});
+
+	ctx.stroke();
+
+	ctx.restore();
+}
+
+function drawPath(path, breakPoints, scope, color = COLOR_PATH) {
+	const canvas = document.getElementById('canvas');
+	const ctx = canvas.getContext('2d');
+	ctx.strokeStyle = color;
+	ctx.fillStyle = color;
 
 	const scaleX = scope.width / canvas.width;
 	const scaleY = scope.height / canvas.height;

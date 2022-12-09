@@ -93,7 +93,7 @@ function getPathWithStat(terrainValues, controlPoints, config) {
 	const minHeight = Math.min(...heights);
 	const maxHeight = Math.max(...heights);
 
-	return {...optimized, insideLimits, stat, averageHeight, minHeight, maxHeight};
+	return {...optimized, insideLimits, stat, averageHeight, minHeight, maxHeight, 'not_optimized_path': path};
 }
 
 function optimizePath(path, controlPoints, limits, diffP, diffN) {
