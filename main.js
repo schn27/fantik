@@ -50,7 +50,7 @@ function calc(terrain) {
 	document.getElementById('minHeight').innerHTML = Math.round(result.minHeight);
 	document.getElementById('maxHeight').innerHTML = Math.round(result.maxHeight);
 
-	const ok = validate(result.path, result.controlPoints, g_config);
+	const ok = validate(result.path, result.controlPoints, terrainValues, g_config);
 	document.getElementById('valid').innerHTML = ok ? 'Норм' : 'Ошибка';
 	document.getElementById('valid').style = ok ? 'background-color:green;' : 'background-color:red;';
 }
@@ -121,7 +121,7 @@ function drawPath(path, breakPoints, scope) {
 	});
 }
 
-function validate(path, controlPoints, config) {
+function validate(path, controlPoints, terrainValues, config) {
 	let prevH = undefined;
 	let dist = 0;
 	const vzs = [];
@@ -139,10 +139,10 @@ function validate(path, controlPoints, config) {
 		}
 	}
 
-	const VZ_TOLERANCE = 1e-6;
+	const TOLERANCE = 1e-6;
 
-	const ok = vzs.every(e => e <= config.maxVz + VZ_TOLERANCE && e >= config.minVz - VZ_TOLERANCE);
-	console.log(ok, vzs);
+	const h_ok = path.every((e, i) => e >= terrainValues[i] + config.followH);
+	const vz_ok = vzs.every(e => e <= config.maxVz + TOLERANCE && e >= config.minVz - TOLERANCE);
 
-	return ok;
+	return h_ok && vz_ok;
 }
