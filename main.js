@@ -2,12 +2,12 @@ import {Terrain} from './modules/terrain.js';
 import {TerrainEditor} from './modules/terrain_editor.js';
 import {getPathWithStat} from './modules/fantik.js';
 
-const COLOR_TERRAIN = '#000000';
-const COLOR_TERRAIN_GRID = '#222222';
-const COLOR_LOW = '#FFFF66';
-const COLOR_TOLERANCE = '#66FF66';
-const COLOR_PATH = '#FF00FF';
-const COLOR_NOT_OPTIMIZED_PATH = '#AAAAAA';
+const COLOR_TERRAIN = '#404030';
+const COLOR_TERRAIN_GRID = '#202020';
+const COLOR_LOW = '#B0B070';
+const COLOR_TOLERANCE = '#A0D0D0';
+const COLOR_PATH = '#000000';
+const COLOR_NOT_OPTIMIZED_PATH = '#808080';
 
 let g_config = {};
 init();
